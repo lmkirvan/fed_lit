@@ -1,0 +1,47 @@
+---
+title: "eda"
+format: html
+editor: visual
+---
+
+# How many cases
+
+pending cases are codded as tapeyear == 2099 for some reason.
+
+```{r}
+
+library(DBI)
+library(tidyverse)
+source("lookups.R")
+
+ds <- arrow::open_dataset("data")
+
+ds |> 
+  group_by(TAPEYEAR) |> 
+  tally() |> 
+  collect() -> temp
+
+temp |> 
+  arrange(TAPEYEAR) |> plot()
+
+```
+
+Disposition time series
+
+```{r}
+
+monthly_disposition <- ds |> 
+  arrow::to_duckdb() |> 
+  mutate(closed_month = lubridate::floor_date(TERMDATE, "month")) |> 
+  group_by(closed_month, DISP) |> 
+  tally() |> 
+  collect()
+
+monthly_disposition |> 
+  filter(DISP != -8) |> 
+  filter(closed_month >= lubridate::ymd("1988-01-01")) |> 
+  left_join(disp) |> 
+  ggplot(aes(closed_month, n, group = type, color = as.factor(type))) +
+  geom_line() 
+  
+```

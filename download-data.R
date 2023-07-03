@@ -1,8 +1,3 @@
-#install.packages("rvest") install.packages("httr") this files work except that
-#the sas file for 2021 doesn't open. I will go back and look at the text files.
-#those also had bad characters, but maybe I can manually fix them. For now I
-#feel like working with actual data and not fixing the file
-
 url <- "https://www.fjc.gov/research/idb/civil-cases-filed-terminated-and-pending-sy-1988-present"
 
 parsed <- rvest::read_html(url) 
@@ -16,17 +11,14 @@ parsed |>
 links |> as.character() |> strsplit(split = "/") |> 
   purrr::map(tail, n = 1) |> 
   purrr::flatten_chr() -> files
-
-links <- links |> purrr::discard( ~ grepl('to23', .))
-files <- files |> purrr::discard( ~ grepl('to23', .))
-
+  
 system("mkdir raw_data")
 
 for(i in seq_along(links)){
   
   download.file(url = links[[i]], destfile = paste0("raw_data/",files[i] ))
 
-} 
+}
 
 raw_data <- list.files("raw_data/")
 file_names <- substr(raw_data, 1,4)
@@ -35,18 +27,24 @@ safely_wds <- purrr::safely(arrow::write_dataset)
 results <- list()
 
 for(file_index in seq_along(raw_data)){
-  
   print(file_index)
-  
-  safely_wds(
+  results[file_index] <- safely_wds(
     haven::read_sas(data_file = paste0("raw_data/", raw_data[file_index]))
     , "data/"
-    , partitioning = c('CIRCUIT', "TAPEYEAR")
-    , basename_template = paste0(file_names[file_index], "-{i}")
-    , max_open_files = 100
-    )
+    , partitioning = c('CIRCUIT', "TAPEYEAR"))$error
   
   gc()
-
+  
 }
+
+# 2021 data files is broken. Lame.
+# Maybe the five year file works? 
+#unzip("cv18to23_0.zip")
+ds <- haven::read_sas("https://www.fjc.gov/sites/default/files/idb/datasets/cv18to23_0.zip")
+#write dataset by year
+arrow::write_dataset(
+  ds
+  , path = "data"
+  , partitioning = c('CIRCUIT', "TAPEYEAR")
+)
 
