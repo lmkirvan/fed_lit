@@ -44,4 +44,80 @@ monthly_disposition |>
   ggplot(aes(closed_month, n, group = type, color = as.factor(type))) +
   geom_line() 
   
+
+
+```
+
+```{r}
+
+monthly_juris <- ds |> 
+  arrow::to_duckdb() |> 
+  mutate(closed_month = lubridate::floor_date(TERMDATE, "month")) |> 
+  group_by(closed_month, JURIS) |> 
+  tally() |> 
+  collect()
+
+monthly_juris |> 
+  filter(JURIS != -8) |> 
+  filter(closed_month >= lubridate::ymd("1988-01-01")) |> 
+  ggplot(aes(closed_month, n, group = JURIS, color = as.factor(JURIS))) +
+  geom_line() 
+  
+
+```
+
+how long was a case open when it closed
+
+```{r}
+
+ds |> 
+  head(1000) |> 
+  pull(FILEDATE) 
+
+ds |> 
+  arrow::to_duckdb() |> 
+  filter(DISP != -8) |> 
+  mutate(
+    days_to_resolve =  TERMDATE - FILEDATE
+    , month = lubridate::floor_date(TERMDATE, "year")) |>
+  group_by(month) |> 
+  summarise(days = mean(days_to_resolve)) |> 
+  collect() -> days_ts
+      
+days_ts |> 
+  filter(month >= lubridate::ymd("1988-01-01")) |> 
+  ggplot(aes(month, days)) +
+  geom_line()
+
+
+names(ds)
+
+ds |> 
+
+  filter(DISP == -8
+         , JURIS != 4) |> 
+  arrow::to_duckdb() |> 
+  mutate(month = lubridate::floor_date(FILEDATE, "month")) |> 
+  group_by(month, JURIS) |> 
+  tally() |> 
+  ggplot(aes(month, n, color = as.factor(JURIS))) + 
+  geom_line()
+
+```
+
+so I think we want to model the time to closure with a censored model.
+
+let's pick a type of jurisdiction (federal question) and a couple of circuits (5th and 11th) over the last 7 years.
+
+```{r}
+
+table_df <- function(df, column){
+  df |> 
+    group_by({{column}}) |> 
+    tally() |> 
+    collect()
+}
+
+
+
 ```

@@ -1,14 +1,18 @@
 
+# write a bind with names functions that adds a column for the names
 disp <- bind_rows(
-  Transfer <- list(
-    DISP = c(0, 1, 10, 11)
+  tibble(
+    type = "transfer"
+    , DISP = c(0, 1, 10, 11)
     , name = c("transfer", "remanded" , "MDL", "agency"))
-  ,Dismissals <- list(
-    DISP = c(2, 3, 12, 13, 14)
+  , tibble(
+    type = "dismissal"
+    , DISP = c(2, 3, 12, 13, 14)
     , name = c("abandoned", "jurisdiction", "voluntary", "settled", "other")
   )
-  , Judgment <- list(
-    DISP = c(4, 5, 6, 7, 8, 9, 15, 16, 17, 18, 19, 20 )
+  , tibble(
+    type = "judgement"
+    , DISP = c(4, 5, 6, 7, 8, 9, 15, 16, 17, 18, 19, 20 )
     , name = c(
       "default"
       , "consent"
@@ -24,3 +28,6 @@ disp <- bind_rows(
       , "appeal deny")
   )
 )
+
+
+?bind_rows
