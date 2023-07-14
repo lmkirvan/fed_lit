@@ -22,6 +22,7 @@ ds |>
   collect() -> temp
 
 temp |> 
+  filter(TAPEYEAR != 2099) |> 
   arrange(TAPEYEAR) |> plot()
 
 ```
@@ -58,11 +59,30 @@ monthly_juris <- ds |>
   collect()
 
 monthly_juris |> 
-  filter(JURIS != -8) |> 
+  filter(JURIS == 1) |> 
   filter(closed_month >= lubridate::ymd("1988-01-01")) |> 
-  ggplot(aes(closed_month, n, group = JURIS, color = as.factor(JURIS))) +
-  geom_line() 
-  
+  ggplot(aes(closed_month, n)) +
+  geom_line() + 
+  labs(
+    x = "Date closed"
+    , y = "Total Federal Suits"
+    , title = "Federal lawsuits with US government Plaintiff")
+
+
+```
+
+```{r}
+
+ds |> 
+  filter(JURIS == 1) |> 
+  filter(TAPEYEAR != 2099) |> 
+  filter(TITL == 28) |> 
+  group_by(TAPEYEAR, SECTION) |> 
+  tally() |> 
+  collect() |> 
+  ggplot(aes(TAPEYEAR, n, color = SECTION)) +
+  geom_line()
+
 
 ```
 
@@ -89,11 +109,7 @@ days_ts |>
   ggplot(aes(month, days)) +
   geom_line()
 
-
-names(ds)
-
 ds |> 
-
   filter(DISP == -8
          , JURIS != 4) |> 
   arrow::to_duckdb() |> 

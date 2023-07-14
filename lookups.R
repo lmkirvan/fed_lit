@@ -28,6 +28,3 @@ disp <- bind_rows(
       , "appeal deny")
   )
 )
-
-
-?bind_rows
