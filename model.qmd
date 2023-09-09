@@ -1,0 +1,32 @@
+---
+title: "model"
+format: html
+editor: visual
+---
+
+```{r}
+
+
+library(DBI)
+library(tidyverse)
+source("lookups.R")
+
+```
+
+```{r}
+
+ds <- arrow::open_dataset("data")
+
+```
+
+```{r}
+
+mod1 <- brms::brm(
+  ttr_log ~  DEMANDED +  (1|CIRCUIT/DISTRICT) + (1|NOS)
+  , data = a_year
+  , cores = 4
+  , chains = 4
+  , iter = 4000
+  , family = gaussian())
+
+```

@@ -27,7 +27,7 @@ temp |>
 
 ```
 
-Disposition time series
+Closure month by disposition
 
 ```{r}
 
@@ -45,9 +45,11 @@ monthly_disposition |>
   ggplot(aes(closed_month, n, group = type, color = as.factor(type))) +
   geom_line() 
   
-
-
 ```
+
+Basis of Jurisdiction in federal courts
+
+Federal Plaintiff litigation
 
 ```{r}
 
@@ -68,6 +70,20 @@ monthly_juris |>
     , y = "Total Federal Suits"
     , title = "Federal lawsuits with US government Plaintiff")
 
+```
+
+Looking at the "nature of the suit"
+
+```{r}
+
+ds |> 
+  filter(JURIS == 1) |> 
+  filter(TAPEYEAR != 2099) |> 
+  group_by(TAPEYEAR, NOS) |> 
+  tally() |> 
+  collect() |>  
+  ggplot(aes(TAPEYEAR, n, color = as.factor(NOS))) +
+  geom_line()
 
 ```
 
@@ -75,13 +91,16 @@ monthly_juris |>
 
 ds |> 
   filter(JURIS == 1) |> 
-  filter(TAPEYEAR != 2099) |> 
-  filter(TITL == 28) |> 
-  group_by(TAPEYEAR, SECTION) |> 
+  filter(NOS == 152) |> 
+  filter(TAPEYEAR != 2099) |>
+  arrow::to_duckdb() |> 
+  mutate(closed_month = lubridate::floor_date(TERMDATE, "month")) |> 
+  group_by(closed_month) |> 
   tally() |> 
-  collect() |> 
-  ggplot(aes(TAPEYEAR, n, color = SECTION)) +
-  geom_line()
+  collect() |>  
+  ggplot(aes(closed_month, n )) +
+  geom_line() +
+  labs(x = "closed month", y = "Number of cases", title = "Student loan recovery lawsuits filed by the US government")  
 
 
 ```
@@ -107,17 +126,20 @@ ds |>
 days_ts |> 
   filter(month >= lubridate::ymd("1988-01-01")) |> 
   ggplot(aes(month, days)) +
-  geom_line()
+  geom_line() +
+  labs(title = "mean days to resolve or transfer")
 
 ds |> 
   filter(DISP == -8
-         , JURIS != 4) |> 
+         , JURIS == 4
+         , FILEDATE > "2000-01-01") |> 
   arrow::to_duckdb() |> 
   mutate(month = lubridate::floor_date(FILEDATE, "month")) |> 
   group_by(month, JURIS) |> 
   tally() |> 
   ggplot(aes(month, n, color = as.factor(JURIS))) + 
-  geom_line()
+  geom_line() 
+  
 
 ```
 
@@ -134,6 +156,104 @@ table_df <- function(df, column){
     collect()
 }
 
+ds |> 
+  mutate(full_court = paste0(CIRCUIT, "-", DISTRICT )) |> 
+  group_by(full_court,  TERMDATE ) |> 
+  tally() |> 
+  collect()-> ts
 
 
+ts |> 
+  filter(TERMDATE >= "2020-01-01") |> 
+  mutate(weekly = lubridate::floor_date(TERMDATE, unit = "week")) |> 
+  filter(stringr::str_starts(full_court, "1-")) |> 
+  group_by(full_court, weekly) |> 
+  summarise(n = sum(n)) |> 
+  ggplot(aes(weekly, n, color = full_court)) +
+  geom_line() 
+
+```
+
+```{r}
+
+years <- ds |>
+  group_by(TAPEYEAR) |> 
+  tally() |> 
+  collect()
+
+res <- list()
+
+for(year in seq_along(years$TAPEYEAR)) {
+  res[[year]] <- ds |> 
+    arrow::to_duckdb() |> 
+    filter(TAPEYEAR == !!years$TAPEYEAR[[year]] ) |> 
+    filter(CIRCUIT == 5) |> 
+    collect() 
+  }
+
+df <- reduce(res, bind_rows)
+
+df <- df |> 
+  mutate(
+    censored = ifelse(TERMDATE == "1900-01-01"
+                      , "censored"
+                      , "not censored")
+    , td_updated = ifelse(TERMDATE == "1900-01-01"
+                        , lubridate::today()
+                        , TERMDATE) |> as_date()
+    , top_coded = ifelse(DEMANDED == 9999, TRUE, FALSE) 
+    , demand_scaled = scale(DEMANDED * 1000)[,1]
+    , time_to_resolve = td_updated - FILEDATE + 1
+    , ttr_log = log(as.integer(time_to_resolve))
+    , day_of_filing = FILEDATE - min(FILEDATE)
+    )
+
+
+df <- df |> 
+  group_by(DISTRICT, FILEDATE)  |> 
+  mutate(n = n()) |> 
+  group_by(DISTRICT, td_updated) |> 
+  mutate(n_closed = n()) |> 
+  group_by(DISTRICT, TRANSDAT) |>
+  mutate(n_transf_in = n()) |> 
+  mutate(n_transf_in = ifelse(is.na(TRANSDAT), 0, TRANSDAT)) |> 
+  mutate(across(starts_with("n"), \(x) ifelse(is.na(x), 0, x) )) |> 
+  group_by(DISTRICT) |> 
+  arrange(FILEDATE) |> 
+  mutate(
+    net = (n + n_transf_in) - n_closed
+    , cum_n = cumsum(as.numeric(net))
+  ) 
+
+df |> 
+  filter(DISTRICT == 40) |> 
+  ggplot(aes( FILEDATE, cum_n, color = DISTRICT)) +
+  geom_line()
+
+temp <- df |> filter(DISTRICT == 40)
+
+temp |> select(FILEDATE, TERMDATE, censored, TRANSDAT, n, n_transf_in, n_closed, net, cum_n) |> 
+  arrange(FILEDATE) -> temp 
+
+view(temp)
+
+```
+
+I think we maybe want to keep track of the number of open cases in a district court?
+
+And then we can use that, plus the number of cases filed in same week as your case and plus demand amount?
+
+```{r}
+
+x <- c(0, 4, 8)
+y <- c(0, 8, 0)
+
+beas_tbl <- bind_cols(
+  x = x
+  ,y = y )
+
+
+beas_tbl |> 
+  ggplot(aes(x, y)) + 
+  geom_area(color = "red", size = 9, fill = "red")
 ```
