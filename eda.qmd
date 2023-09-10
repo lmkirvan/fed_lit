@@ -208,52 +208,51 @@ df <- df |>
     , day_of_filing = FILEDATE - min(FILEDATE)
     )
 
+daily_filings <- df |> 
+  group_by(DISTRICT, FILEDATE) |> 
+  summarise(n_filings = n()) |> 
+  mutate(DATE = FILEDATE)
 
-df <- df |> 
-  group_by(DISTRICT, FILEDATE)  |> 
-  mutate(n = n()) |> 
+daily_transfer <- df |> 
+  group_by(DISTRICT, TRANSDAT) |> 
+  summarise(n_transfer_in = n()) |>  
+  filter(!is.na(TRANSDAT)) |> 
+  mutate(DATE = TRANSDAT)
+
+
+daily_terms <- df |> 
   group_by(DISTRICT, td_updated) |> 
-  mutate(n_closed = n()) |> 
-  group_by(DISTRICT, TRANSDAT) |>
-  mutate(n_transf_in = n()) |> 
-  mutate(n_transf_in = ifelse(is.na(TRANSDAT), 0, TRANSDAT)) |> 
-  mutate(across(starts_with("n"), \(x) ifelse(is.na(x), 0, x) )) |> 
-  group_by(DISTRICT) |> 
-  arrange(FILEDATE) |> 
+  summarise(n_terms = n())  |> 
+  mutate(DATE = td_updated)
+
+
+ts <- left_join(daily_filings, daily_terms) |> 
+  left_join(daily_transfer) |> 
+  select(DATE, DISTRICT, n_terms, n_transfer_in, n_filings)
+
+ts <- ts |> 
   mutate(
-    net = (n + n_transf_in) - n_closed
-    , cum_n = cumsum(as.numeric(net))
-  ) 
+    across(
+      starts_with("n_")
+      , .fns = \(x) ifelse(is.na(x), 0, x)
+      )
+    )
 
-df |> 
-  filter(DISTRICT == 40) |> 
-  ggplot(aes( FILEDATE, cum_n, color = DISTRICT)) +
-  geom_line()
+ts <- ts |> 
+  mutate(net = n_filings + n_transfer_in  - n_terms) |> 
+  group_by(DISTRICT) |> 
+  mutate(cum_case = cumsum(net))
 
-temp <- df |> filter(DISTRICT == 40)
+df <- left_join(
+  df
+  , ts
+  , by = c("FILEDATE" = "DATE", "DISTRICT"= "DISTRICT")
+  )
 
-temp |> select(FILEDATE, TERMDATE, censored, TRANSDAT, n, n_transf_in, n_closed, net, cum_n) |> 
-  arrange(FILEDATE) -> temp 
 
-view(temp)
 
 ```
 
 I think we maybe want to keep track of the number of open cases in a district court?
 
 And then we can use that, plus the number of cases filed in same week as your case and plus demand amount?
-
-```{r}
-
-x <- c(0, 4, 8)
-y <- c(0, 8, 0)
-
-beas_tbl <- bind_cols(
-  x = x
-  ,y = y )
-
-
-beas_tbl |> 
-  ggplot(aes(x, y)) + 
-  geom_area(color = "red", size = 9, fill = "red")
-```
