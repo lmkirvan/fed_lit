@@ -6,27 +6,272 @@ editor: visual
 
 ```{r}
 
-
-library(DBI)
 library(tidyverse)
 source("lookups.R")
 
 ```
 
 ```{r}
+df <- readr::read_csv("final_data.csv")
 
-ds <- arrow::open_dataset("data")
+df <- df |> 
+  filter(FILEDATE >= "2000-01-01")
+```
+
+```{r}
+
+df <- df |> 
+  group_by(DISTRICT) |> 
+  mutate(oc_c = scale(open_cases)[ ,1])
+
+df$day_of_filing <- df$day_of_filing -
+  min(df$day_of_filing)
+
+df$fy <- lubridate::year(df$FILEDATE) 
+df$fy <- df$fy - min(df$fy)
+df$day_of_filing <- df$day_of_filing - median(df$day_of_filing)
+df$censored <- df$censored == "censored"
+
+set.seed(192)
+
+sample <- df |>  sample_frac(.01)
+sample$origin_f <- as.factor(sample$ORIGIN)
+
+rm(df)
+gc()
+
+```
+
+
+```{R}
+
+bf0 <- brms::bf( ttr_log | cens(censored) ~ (1 + fy  | DISTRICT), decomp = "QR")
+
+mod0 <- brms::brm(
+  bf0
+  , data = sample
+  , cores = 4
+  , chains = 4
+  , iter = 4000
+  , family = brms::skew_normal()
+  , control = list(adapt_delta = .85))
+
+bf1 <- brms::bf( ttr_log | cens(censored) ~ (1 + oc_c  | DISTRICT), decomp = "QR")
+
+mod1 <- brms::brm(
+  bf1
+  , data = sample
+  , cores = 4
+  , chains = 4
+  , iter = 4000
+  , family = brms::skew_normal()
+  , control = list(adapt_delta = .85))
+
+save(mod1, file =  "mod1.Rdata")
+save(mod1_w, file =  "mod1_w.Rdata")
+
+load("mod0.Rdata")
+load("model7_w.Rdata")
+loo0 <- brms::loo(mod0)
+loo7 <- brms::loo_subsample(mod7_w, observations = 100)
+
+brms::loo_compare(loo0, loo7)
+
+
+
+brms::pp_check(mod1)
+brms::waic(mod0)
+
+#save(mod1, file = "mod1.Rdata")
+
+#does decomp speed it up? 
+bf2 <- brms::bf( ttr_log | cens(censored) ~ fy + (1 + oc_c + fy | DISTRICT), decomp = "QR")
+
+mod2 <- brms::brm(
+  bf2
+  , data = sample
+  , cores = 4
+  , chains = 4
+  , iter = 4000
+  , family = brms::skew_normal()
+  , control = list(adapt_delta = .85))
+
+#save(mod1, file = "mod1.Rdata")
+
+#mod2 <- brms::brm(
+#  ttr_log | cens(censored) ~  oc_c + (1 | DISTRICT)
+#  , data = sample
+#  , cores = 4
+#  , chains = 4
+#  , iter = 4000
+#  , family = gaussian()
+#  , control = list(adapt_delta = .85))
+
+#mo2.5 <- brms::brm(
+#  ttr_log | cens(censored) ~  oc_c +  (1 + oc_c | #DISTRICT)
+#  , data = sample
+#  , cores = 4
+#  , chains = 4
+##  , iter = 4000
+#  , family = gaussian()
+#  , control = list(adapt_delta = .85))
+
+#mod3 <- brms::brm(
+#  ttr_log | cens(censored) ~   (1 + oc_c | fy | DISTRICT)
+#  , data = sample
+#  , cores = 4
+#  , chains = 4
+#  , iter = 4000
+#  , family = gaussian()
+#  , control = list(adapt_delta = .85))
+
+#mod4 <- brms::brm(
+#  ttr_log | cens(censored) ~  (1| NOS) +  (1 + oc_c | fy | DISTRICT)
+#  , data = sample
+#  , cores = 4
+#  , chains = 4
+#  , iter = 4000
+#  , family = gaussian()
+#  , control = list(adapt_delta = .85))
+
+#summary(mod4)
+
+#mod5 <- brms::brm(
+#  ttr_log | cens(censored) ~ fy +  (1| NOS) +  (1 + oc_c | fy | DISTRICT)
+#  , data = sample
+#  , cores = 4
+#  , chains = 4
+#  , iter = 4000
+#  , family = gaussian()
+#  , control = list(adapt_delta = .85))
+
+```
+
+So starting here with a relatively simple model. oc_c is the number of open cases in a given district (scaled within district). NOS is the nature of the suit (a case type assigned by Bureau for Justice Statistics). The model doesn't predict a slight bump in complaints at 0 (log(1)). Those are mostly pro se cases--but they are pretty small over all. we can try to fit with pro in model 7? I bet that will be a pretty slow model to fit though.
+
+```{r}
+
+#sample |> 
+#  ggplot(aes(as.factor(), ttr_log)) +
+#  geom_boxplot() 
+  #facet_grid(vars(TITL), scales = "free") +
+
+# this skew normal model fits well enough. there is a missing bump at zero
+# (cases settled in one day.) those are mostly pro se cases.
+#bf6 <-   brms::bf(ttr_log | cens(censored) ~ fy +  (1| NOS) +  (1 + oc_c  | DISTRICT) )
+
+#mod6 <- brms::brm(
+#  bf6
+#  , data = sample
+#  , cores = 4
+#  , chains = 4
+#  , iter = 4000
+#  , family = brms::skew_normal()
+#  , control = list(adapt_delta = .85))
+
+#load("mod6.Rdata")
+#save(mod6,file =  "mod6.Rdata")
+#brms::pp_check(mod6)
+#summary(mod6)
 
 ```
 
 ```{r}
 
-mod1 <- brms::brm(
-  ttr_log ~  DEMANDED +  (1|CIRCUIT/DISTRICT) + (1|NOS)
-  , data = a_year
+sample$district_F <- as.factor(sample$DISTRICT)
+
+#sample |> 
+#  ggplot(aes(PROSE, fill = as.factor(JURIS), group = as.factor(JURIS))) +
+#  geom_bar(position = position_fill())
+
+bf1 <-   brms::bf(ttr_log | cens(censored) ~ fy +  (1 + fy |DISTRICT))
+bf2 <-   brms::bf(ttr_log | cens(censored) ~  fy + (1 + fy + oc_c |district_F))
+
+mod1_w <- brms::brm(
+  bf1 
+  , data = sample 
   , cores = 4
   , chains = 4
-  , iter = 4000
-  , family = gaussian())
+  , iter = 3500
+  , family = brms::skew_normal()
+  , control = list(
+    adapt_delta = .95
+    , max_treedepth = 12)
+  )
+
+brms::pp_check(mod1_w)
+
+mod2_w <- brms::brm(
+  bf2 
+  , data = sample 
+  , cores = 4
+  , chains = 4
+  , iter = 3500
+  , family = brms::skew_normal()
+  , control = list(
+    adapt_delta = .95
+    , max_treedepth = 12)
+  )
+
+
+bf7 <-   brms::bf(ttr_log | cens(censored) ~ PROSE + fy  + (1 |origin_f) + (1 + oc_c +fy |district_F))
+
+mod7_w <- brms::brm(
+  bf7 
+  , data = sample 
+  , cores = 4
+  , chains = 4
+  , iter = 3500
+  , family = brms::skew_normal()
+  , control = list(
+    adapt_delta = .95
+    , max_treedepth = 12)
+  )
+
+brms::pp_check(mod7_w)
+
+#save(mod7_w,file =  "model7_w.Rdata")
+load("model7_w.Rdata")
+
+bayesplot::ppc_km_overlay(
+  yrep = exp(brms::posterior_predict(mod7_w, ndraws = 50))
+  , status_y = as.numeric(mod7_w$data$censored)
+  , y = exp(mod7_w$data$ttr_log  ))
+
+
+
+
+table(sample$JURIS )
+
+
 
 ```
+
+this took overnight to run and the pp check looked way worse than the skew normal results, but maybe I should figure out if there is some way to identify the extremely short cases better with just some linear terms int the main model
+
+
+```{r}
+#| label:model_8
+
+
+bf8 <- brms::bf(ttr_log | cens(censored) ~ 
+                  fy  + (1 |origin_f) + (1 + oc_c +fy |district_F)
+                , hu ~ PROSE + IFP)
+
+mod8_w <- brms::brm(
+  bf8 
+  , data = sample 
+  , cores = 4
+  , chains = 4
+  , iter = 3500
+  , family = brms::hurdle_lognormal()
+  , control = list(adapt_delta = .95))
+
+
+summary(mod8_w)
+brms::pp_check(mod8_w)
+brms::waic(mod8_w)
+
+```
+
+

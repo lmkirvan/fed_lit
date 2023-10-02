@@ -1,0 +1,35 @@
+---
+title: "judges"
+format: html
+editor: visual
+---
+
+Trying to get a dataset of which judges are in each district court on each day.
+
+Each judge has his own page with a structured paragraph. Detailing service.
+
+```{r}
+
+# base url with pages for each letter:
+url <- "https://www.fjc.gov/history/judges/search/glossary-search/"
+
+letters <- letters
+urls <- paste0(url, letters)
+
+result <- rvest::read_html(urls[[1]])
+
+body <- result |> 
+  rvest::html_text2()
+
+nodes <- rvest::html_element(
+  result
+  , css = "body > div.l-page > div > div > div > div.view-content")
+
+nodes |> 
+  rvest::html_elements("a") |> 
+  rvest::html_attrs() -> judges_urls
+
+judges_urls <- paste0("fjc.gov", judges_urls)
+
+
+```

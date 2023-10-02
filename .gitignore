@@ -50,3 +50,5 @@ rsconnect/
 *.parquet.tmp
 *.txt
 *.zip
+*.Rdata
+*.csv

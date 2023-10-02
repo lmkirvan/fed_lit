@@ -219,12 +219,10 @@ daily_transfer <- df |>
   filter(!is.na(TRANSDAT)) |> 
   mutate(DATE = TRANSDAT)
 
-
 daily_terms <- df |> 
   group_by(DISTRICT, td_updated) |> 
   summarise(n_terms = n())  |> 
   mutate(DATE = td_updated)
-
 
 ts <- left_join(daily_filings, daily_terms) |> 
   left_join(daily_transfer) |> 
@@ -241,7 +239,7 @@ ts <- ts |>
 ts <- ts |> 
   mutate(net = n_filings + n_transfer_in  - n_terms) |> 
   group_by(DISTRICT) |> 
-  mutate(cum_case = cumsum(net))
+  mutate(open_cases = cumsum(net))
 
 df <- left_join(
   df
@@ -250,9 +248,19 @@ df <- left_join(
   )
 
 
+df |> 
+  ggplot(aes(FILEDATE, open_cases)) + 
+  geom_line() +
+  facet_grid(vars(DISTRICT), scales = "free")
 
 ```
 
 I think we maybe want to keep track of the number of open cases in a district court?
 
 And then we can use that, plus the number of cases filed in same week as your case and plus demand amount?
+
+```{r}
+
+write_csv(df, "final_data.csv")
+
+```
