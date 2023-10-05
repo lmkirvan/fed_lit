@@ -16,20 +16,49 @@ url <- "https://www.fjc.gov/history/judges/search/glossary-search/"
 letters <- letters
 urls <- paste0(url, letters)
 
-result <- rvest::read_html(urls[[1]])
+get_judges <- function(letter_url){
+  
+  rvest::read_html(letter_url) |> 
+    rvest::html_element(
+      css = "body > div.l-page > div > div > div > div.view-content") |> 
+    rvest::html_elements("a") |> 
+    rvest::html_attrs() -> judge_stems
+  
+  paste0("https://www.fjc.gov", judge_stems)
+}
 
-body <- result |> 
-  rvest::html_text2()
+judges <- purrr::map(urls, get_judges) |>  purrr::list_c()
 
-nodes <- rvest::html_element(
-  result
-  , css = "body > div.l-page > div > div > div > div.view-content")
+judges[[1000]] |> rvest::read_html() |> 
+  rvest::html_element(css = "body > div.l-page > div > div > div > div") |> 
+  rvest::html_text2() -> single_text
 
-nodes |> 
-  rvest::html_elements("a") |> 
-  rvest::html_attrs() -> judges_urls
+ff <- function(key_words){
+  
+  group_name <- stringr::str_remove_all(key_words, " ")
+  
+  patterns <-glue::glue(
+    "(?<{{group_name}}>{{key_words}}[^\\.]*[0-9]{4}[:punct:])"
+    , key_words = key_words
+    , group_name = group_name
+    , .open = "{{"
+    , .close = "}}"
+    )
+  
+  purrr::partial(stringr::str_match_all, pattern = patterns)
+  }
 
-judges_urls <- paste0("fjc.gov", judges_urls)
+single_text
+
+ff(c( "commission", "terminated"))(string = single_text)
+
+
+single_text
+
+# h1 is name of judge
+## this insane thing is the main paragraph. 
+##/html/body/div[4]/div/div/div/div/div[1]/div/div/div/div/div/div[1]/div/div
+
 
 
 ```
