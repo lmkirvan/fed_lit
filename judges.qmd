@@ -4,9 +4,22 @@ format: html
 editor: visual
 ---
 
-Trying to get a dataset of which judges are in each district court on each day.
+Trying to get a data-set of which judges are in each district court on each day.
 
 Each judge has his own page with a structured paragraph. Detailing service.
+
+we need:
+
+-   appointments (sometimes more than one)
+
+    -   date of start, date of senior status, date of termination
+
+```{=html}
+<!-- -->
+```
+-   president (can vary by appointment)
+
+-   court (can vary by appointment)
 
 ```{r}
 
@@ -29,11 +42,17 @@ get_judges <- function(letter_url){
 
 judges <- purrr::map(urls, get_judges) |>  purrr::list_c()
 
-judges[[1000]] |> rvest::read_html() |> 
-  rvest::html_element(css = "body > div.l-page > div > div > div > div") |> 
-  rvest::html_text2() -> single_text
+get_text <- function(url){ 
+  url |> 
+    rvest::read_html() |> 
+    rvest::html_element(css = "body > div.l-page > div > div > div > div") |> 
+    rvest::html_text2()
+  }
 
-ff <- function(key_words){
+#this takes a bit. 
+texts <- purrr:::map(judges, get_text)
+
+ff_y <- function(key_words){
   
   group_name <- stringr::str_remove_all(key_words, " ")
   
@@ -45,20 +64,18 @@ ff <- function(key_words){
     , .close = "}}"
     )
   
-  purrr::partial(stringr::str_match_all, pattern = patterns)
+  purrr::partial(stringr::str_extract_all, pattern = patterns)
+  
   }
 
-single_text
+temp <- ff( c( "commission", "status", "terminated") )(string = single_text)
 
-ff(c( "commission", "terminated"))(string = single_text)
+presidents <- c("George Washington","John Adams","Thomas Jefferson","James Madison","James Monroe","John Quincy Adams","Andrew Jackson","Martin Van Buren","William Henry Harrison","John Tyler","James K. Polk","Zachary Taylor","Millard Fillmore","Franklin Pierce","James Buchanan","Abraham Lincoln","Andrew Johnson","Ulysses S. Grant","Rutherford B. Hayes","James A. Garfield","Chester Arthur","Grover Cleveland^","Benjamin Harrison","Grover Cleveland^","William McKinley","Theodore Roosevelt","William Howard Taft","Woodrow Wilson","Warren G. Harding","Calvin Coolidge","Herbert Hoover","Franklin D. Roosevelt","Harry S. Truman","Dwight D. Eisenhower","John F. Kennedy","Lyndon B. Johnson","Richard M. Nixon","Gerald Ford","Jimmy Carter","Ronald Reagan","George H. W. Bush","Bill Clinton","George W. Bush","Barack Obama","Donald Trump","Joe Biden")
 
 
-single_text
 
 # h1 is name of judge
 ## this insane thing is the main paragraph. 
 ##/html/body/div[4]/div/div/div/div/div[1]/div/div/div/div/div/div[1]/div/div
-
-
 
 ```
