@@ -51,15 +51,18 @@ get_text <- function(url){
 
 #this takes a bit. 
 texts <- purrr:::map(judges, get_text)
+#discard everything after education!
+texts <- 
 
-ff_y <- function(key_words){
-  
-  group_name <- stringr::str_remove_all(key_words, " ")
+#this was just so I could iterate regex while testing. but having a keyword and
+#'rest' function might be good here. could paste together different ends. 
+ff <- function(key_words, rest = ".*?[0-9]{4}[:punct:]" ){
   
   patterns <-glue::glue(
-    "(?<{{group_name}}>{{key_words}}[^\\.]*[0-9]{4}[:punct:])"
+    "({{key_words}}{{rest}})"
     , key_words = key_words
     , group_name = group_name
+    , rest = rest
     , .open = "{{"
     , .close = "}}"
     )
@@ -68,14 +71,44 @@ ff_y <- function(key_words){
   
   }
 
-temp <- ff( c( "commission", "status", "terminated") )(string = single_text)
+#this gets the dates for various court changes 
+get_dates <- ff(c("[nN]ominated"
+                  , "[cC]ommission"
+                  , "[sS]tatus"
+                  , "[:space:][Aa]ssigned"
+                  , "[Rr]eassigned"
+                  , "[tT]erminated"))
+dates <- purrr::map(texts, get_dates)
 
-presidents <- c("George Washington","John Adams","Thomas Jefferson","James Madison","James Monroe","John Quincy Adams","Andrew Jackson","Martin Van Buren","William Henry Harrison","John Tyler","James K. Polk","Zachary Taylor","Millard Fillmore","Franklin Pierce","James Buchanan","Abraham Lincoln","Andrew Johnson","Ulysses S. Grant","Rutherford B. Hayes","James A. Garfield","Chester Arthur","Grover Cleveland^","Benjamin Harrison","Grover Cleveland^","William McKinley","Theodore Roosevelt","William Howard Taft","Woodrow Wilson","Warren G. Harding","Calvin Coolidge","Herbert Hoover","Franklin D. Roosevelt","Harry S. Truman","Dwight D. Eisenhower","John F. Kennedy","Lyndon B. Johnson","Richard M. Nixon","Gerald Ford","Jimmy Carter","Ronald Reagan","George H. W. Bush","Bill Clinton","George W. Bush","Barack Obama","Donald Trump","Joe Biden")
+## court names 
+get_courts <- ff(c("Justice", "Judge"), rest = ".*?\n") 
+courts <- purrr::map(texts, get_courts)
 
+#the total number of terminations should match the total number of commissions and assignments 
 
+#the total number of courts should match the commisions plust assigments for judges that are terminated
 
-# h1 is name of judge
-## this insane thing is the main paragraph. 
-##/html/body/div[4]/div/div/div/div/div[1]/div/div/div/div/div/div[1]/div/div
+commissions <- purrr::map(dates, 2) |> lengths()
+assign <- (purrr::map(dates, 4) |> lengths()) + (purrr::map(dates, 5) |> lengths()) 
 
+total <- commissions + assign
+
+terminations <- purrr::map(dates, 6) |> lengths()
+
+total
+terminations
+dates[[11]]
+judges[[11]]
+
+total_courts <- (map(courts, 1) |> lengths()) + (map(courts,2) |> lengths() ) 
+
+terminations <- ifelse(terminations == 0, 1, terminations)
+
+sum(total != total_courts)
+
+judges[terminations != total] 
+
+courts[[283]]
+
+#need to fix the manuscript collections and bibliography
 ```
