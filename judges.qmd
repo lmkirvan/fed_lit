@@ -49,10 +49,31 @@ get_text <- function(url){
     rvest::html_text2()
   }
 
-#this takes a bit. 
-texts <- purrr:::map(judges, get_text)
+start_of_match <- function(string, pattern){
+  stringr::str_locate(string, pattern)[ , 1]
+}
+
+# function to make 
+cut_after <- function(string, pattern){
+  location <- start_of_match(string, pattern ) 
+  location[is.na(location)] <- nchar(string)[is.na(location)]
+  str_sub( string, start = 0, end = location)
+}
+
+#this takes a bit. may need to do it safely
+texts <- purrr:::map_chr(judges, get_text)
+#save(texts, file = "texts.Rdata")
 #discard everything after education!
-texts <- 
+stop <- str_locate(texts, "Education")[ ,1] 
+oath <- str_locate(texts, "Supreme Court Oath:")[, 1]
+stop <- ifelse(is.na(oath), stop, oath)
+
+texts <- as.character(texts)
+
+texts |> 
+  cut_after("Education") |> 
+  cut_after("Supreme Court Oath:") |> 
+  cut_after("Other Federal Judicial Service:")-> short_texts
 
 #this was just so I could iterate regex while testing. but having a keyword and
 #'rest' function might be good here. could paste together different ends. 
@@ -77,38 +98,37 @@ get_dates <- ff(c("[nN]ominated"
                   , "[sS]tatus"
                   , "[:space:][Aa]ssigned"
                   , "[Rr]eassigned"
-                  , "[tT]erminated"))
-dates <- purrr::map(texts, get_dates)
+                  , "[tT]erminated")
+                )
+
+dates <- purrr::map(short_texts, get_dates)
 
 ## court names 
 get_courts <- ff(c("Justice", "Judge"), rest = ".*?\n") 
-courts <- purrr::map(texts, get_courts)
+courts <- purrr::map(short_texts, get_courts)
 
 #the total number of terminations should match the total number of commissions and assignments 
-
 #the total number of courts should match the commisions plust assigments for judges that are terminated
 
 commissions <- purrr::map(dates, 2) |> lengths()
 assign <- (purrr::map(dates, 4) |> lengths()) + (purrr::map(dates, 5) |> lengths()) 
 
 total <- commissions + assign
-
 terminations <- purrr::map(dates, 6) |> lengths()
 
-total
+terminations <- ifelse(terminations == 0, 1, terminations)
 terminations
-dates[[11]]
-judges[[11]]
+total
 
 total_courts <- (map(courts, 1) |> lengths()) + (map(courts,2) |> lengths() ) 
-
-terminations <- ifelse(terminations == 0, 1, terminations)
-
 sum(total != total_courts)
 
-judges[terminations != total] 
+which(total_courts != total)
+```
 
-courts[[283]]
+```{]}
+
 
 #need to fix the manuscript collections and bibliography
+
 ```
