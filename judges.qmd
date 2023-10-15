@@ -14,9 +14,8 @@ we need:
 
     -   date of start, date of senior status, date of termination
 
-```{=html}
 <!-- -->
-```
+
 -   president (can vary by appointment)
 
 -   court (can vary by appointment)
@@ -73,7 +72,8 @@ texts <- as.character(texts)
 texts |> 
   cut_after("Education") |> 
   cut_after("Supreme Court Oath:") |> 
-  cut_after("Other Federal Judicial Service:")-> short_texts
+  cut_after("Other Federal Judicial Service:") |> 
+  cut_after("Professional Career")-> short_texts
 
 #this was just so I could iterate regex while testing. but having a keyword and
 #'rest' function might be good here. could paste together different ends. 
@@ -89,8 +89,7 @@ ff <- function(key_words, rest = ".*?[0-9]{4}[:punct:]" ){
     )
   
   purrr::partial(stringr::str_extract_all, pattern = patterns)
-  
-  }
+}
 
 #this gets the dates for various court changes 
 get_dates <- ff(c("[nN]ominated"
@@ -104,12 +103,11 @@ get_dates <- ff(c("[nN]ominated"
 dates <- purrr::map(short_texts, get_dates)
 
 ## court names 
-get_courts <- ff(c("Justice", "Judge"), rest = ".*?\n") 
+get_courts <- ff(c("Justice", "Judge", "not confirmed"), rest = ".*?\n") 
 courts <- purrr::map(short_texts, get_courts)
 
 #the total number of terminations should match the total number of commissions and assignments 
 #the total number of courts should match the commisions plust assigments for judges that are terminated
-
 commissions <- purrr::map(dates, 2) |> lengths()
 assign <- (purrr::map(dates, 4) |> lengths()) + (purrr::map(dates, 5) |> lengths()) 
 
@@ -124,9 +122,21 @@ total_courts <- (map(courts, 1) |> lengths()) + (map(courts,2) |> lengths() )
 sum(total != total_courts)
 
 which(total_courts != total)
+judges[[1466]]
+get_dates(short_texts[[1466]])
+get_courts(texts)
+
 ```
 
-```{]}
+-   split into date and non date part
+
+-   group by individual
+
+-   function that takes court list and date lists and does a join of some kind
+
+    -   
+
+```{r}
 
 
 #need to fix the manuscript collections and bibliography
