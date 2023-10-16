@@ -129,12 +129,22 @@ get_courts(texts)
 ```
 
 -   split into date and non date part
-
--   group by individual
-
 -   function that takes court list and date lists and does a join of some kind
 
-    -   
+Modeling questions
+
+do we want to have groups for each set of unique judges in a district. That could be done by just concatenating their names together? 
+
+We want to look at a couple of things
+
+- how long it takes for cases to get resolved over time
+- how filing behavior changes as judges get added 
+- how different groups of appointees--most importantly appointing president
+
+
+
+
+
 
 ```{r}
 
