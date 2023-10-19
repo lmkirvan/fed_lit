@@ -4,6 +4,57 @@ format: html
 editor: visual
 ---
 
+```{r setup}
+
+get_judges <- function(letter_url){
+  
+  rvest::read_html(letter_url) |> 
+    rvest::html_element(
+      css = "body > div.l-page > div > div > div > div.view-content") |> 
+    rvest::html_elements("a") |> 
+    rvest::html_attrs() -> judge_stems
+  
+  paste0("https://www.fjc.gov", judge_stems)
+}
+
+get_text <- function(url){ 
+  
+  print(url)
+  
+  url |> 
+    rvest::read_html() |> 
+    rvest::html_element(css = "body > div.l-page > div > div > div > div") |> 
+    rvest::html_text2()
+  }
+
+# helper function need to look at if this impacts speed 
+start_of_match <- function(string, pattern){
+  stringr::str_locate(string, pattern)[ , 1]
+  }
+  
+# function to get the first part of a string based on a match
+str_cut_after <- function(string, pattern){
+  location <- start_of_match(string, pattern ) 
+  location[is.na(location)] <- nchar(string)[is.na(location)]
+  stringr::str_sub( string, start = 0, end = location)
+}
+
+# using a function factor here so that I can avoid editing this so much while
+# testing. these are nice for interactive use!
+ff <- function(key_words, rest = ".*?[0-9]{4}[:punct:]" ){
+  patterns <-glue::glue(
+    "({{key_words}}{{rest}})"
+    , key_words = key_words
+    , group_name = group_name
+    , rest = rest
+    , .open = "{{"
+    , .close = "}}"
+    )
+  purrr::partial(stringr::str_extract_all, pattern = patterns)
+}
+
+```
+
 Trying to get a data-set of which judges are in each district court on each day.
 
 Each judge has his own page with a structured paragraph. Detailing service.
@@ -13,8 +64,6 @@ we need:
 -   appointments (sometimes more than one)
 
     -   date of start, date of senior status, date of termination
-
-<!-- -->
 
 -   president (can vary by appointment)
 
@@ -28,68 +77,29 @@ url <- "https://www.fjc.gov/history/judges/search/glossary-search/"
 letters <- letters
 urls <- paste0(url, letters)
 
-get_judges <- function(letter_url){
-  
-  rvest::read_html(letter_url) |> 
-    rvest::html_element(
-      css = "body > div.l-page > div > div > div > div.view-content") |> 
-    rvest::html_elements("a") |> 
-    rvest::html_attrs() -> judge_stems
-  
-  paste0("https://www.fjc.gov", judge_stems)
-}
+# use the get_judges function to get the list of links for all the judges
+judge_urls <- purrr::map(urls, get_judges) |>  purrr::list_c()
+judge_names <- stringr::str_remove(
+  judge_urls
+  , "https://www.fjc.gov/history/judges/"
+  )
 
-judges <- purrr::map(urls, get_judges) |>  purrr::list_c()
-
-get_text <- function(url){ 
-  url |> 
-    rvest::read_html() |> 
-    rvest::html_element(css = "body > div.l-page > div > div > div > div") |> 
-    rvest::html_text2()
-  }
-
-start_of_match <- function(string, pattern){
-  stringr::str_locate(string, pattern)[ , 1]
-}
-
-# function to make 
-cut_after <- function(string, pattern){
-  location <- start_of_match(string, pattern ) 
-  location[is.na(location)] <- nchar(string)[is.na(location)]
-  str_sub( string, start = 0, end = location)
-}
+# these are last, first second etc. 
+judge_names <- stringr::str_split(judge_names, "-")
 
 #this takes a bit. may need to do it safely
-texts <- purrr:::map_chr(judges, get_text)
+texts <- purrr:::map_chr(judge_urls, get_text)
 #save(texts, file = "texts.Rdata")
-#discard everything after education!
-stop <- str_locate(texts, "Education")[ ,1] 
-oath <- str_locate(texts, "Supreme Court Oath:")[, 1]
-stop <- ifelse(is.na(oath), stop, oath)
 
-texts <- as.character(texts)
+```
+
+```{r}
 
 texts |> 
-  cut_after("Education") |> 
-  cut_after("Supreme Court Oath:") |> 
-  cut_after("Other Federal Judicial Service:") |> 
-  cut_after("Professional Career")-> short_texts
-
-#this was just so I could iterate regex while testing. but having a keyword and
-#'rest' function might be good here. could paste together different ends. 
-ff <- function(key_words, rest = ".*?[0-9]{4}[:punct:]" ){
-  
-  patterns <-glue::glue(
-    "({{key_words}}{{rest}})"
-    , key_words = key_words
-    , group_name = group_name
-    , rest = rest
-    , .open = "{{"
-    , .close = "}}"
-    )
-  
-  purrr::partial(stringr::str_extract_all, pattern = patterns)
-}
+  str_cut_after("Education") |> 
+  str_cut_after("Supreme Court Oath:") |> 
+  str_cut_after("Other Federal Judicial Service:") |> 
+  str_cut_after("Professional Career")-> short_texts
 
 #this gets the dates for various court changes 
 get_dates <- ff(c("[nN]ominated"
@@ -107,44 +117,26 @@ get_courts <- ff(c("Justice", "Judge", "not confirmed"), rest = ".*?\n")
 courts <- purrr::map(short_texts, get_courts)
 
 #the total number of terminations should match the total number of commissions and assignments 
-#the total number of courts should match the commisions plust assigments for judges that are terminated
-commissions <- purrr::map(dates, 2) |> lengths()
-assign <- (purrr::map(dates, 4) |> lengths()) + (purrr::map(dates, 5) |> lengths()) 
-
-total <- commissions + assign
-terminations <- purrr::map(dates, 6) |> lengths()
-
-terminations <- ifelse(terminations == 0, 1, terminations)
-terminations
-total
-
-total_courts <- (map(courts, 1) |> lengths()) + (map(courts,2) |> lengths() ) 
-sum(total != total_courts)
-
-which(total_courts != total)
-judges[[1466]]
-get_dates(short_texts[[1466]])
-get_courts(texts)
 
 ```
+
+some stuff do to do:
 
 -   split into date and non date part
 -   function that takes court list and date lists and does a join of some kind
 
 Modeling questions
 
-do we want to have groups for each set of unique judges in a district. That could be done by just concatenating their names together? 
+do we want to have groups for each set of unique judges in a district. That could be done by just concatenating their names together?
 
 We want to look at a couple of things
 
-- how long it takes for cases to get resolved over time
-- how filing behavior changes as judges get added 
-- how different groups of appointees--most importantly appointing president
-
-
-
-
-
+-   how long it takes for cases to get resolved over time
+-   how filing behavior changes as judges get added
+-   how different groups of appointees--most importantly grouped appointing president change flows into different courts
+    -   do they change the mix of lawsuits brought to each court (interaction with nature of suit?)
+    -   do they change the pace of filings
+    -   do they change which kinds of parties are filing
 
 ```{r}
 
