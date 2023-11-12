@@ -20,7 +20,7 @@ get_judges <- function(letter_url){
 get_text <- function(url){ 
   
   print(url)
-  
+  Sys.sleep(.1)
   url |> 
     rvest::read_html() |> 
     rvest::html_element(css = "body > div.l-page > div > div > div > div") |> 
@@ -87,13 +87,20 @@ judge_names <- stringr::str_remove(
 # these are last, first second etc. 
 judge_names <- stringr::str_split(judge_names, "-")
 
+# get it all
+get_text_safely <- purrr::safely(get_text, otherwise = NA)
+
 #this takes a bit. may need to do it safely
-texts <- purrr:::map_chr(judge_urls, get_text)
-#save(texts, file = "texts.Rdata")
+texts_results <- purrr:::map(judge_urls, get_text_safely)
+
+texts <- purrr::map_chr(texts_results, "result")
+save(texts, file = "texts.Rdata")
 
 ```
 
 ```{r}
+
+load("texts.Rdata")
 
 texts |> 
   str_cut_after("Education") |> 
@@ -116,7 +123,79 @@ dates <- purrr::map(short_texts, get_dates)
 get_courts <- ff(c("Justice", "Judge", "not confirmed"), rest = ".*?\n") 
 courts <- purrr::map(short_texts, get_courts)
 
-#the total number of terminations should match the total number of commissions and assignments 
+
+# This kinda works
+get_dates_df <- function(list){ 
+  
+  list[c(2,4,5)] |> 
+    purrr::reduce(c) |> 
+    purrr::map(dplyr::as_tibble) |> 
+    purrr::reduce(dplyr::bind_rows) |> 
+    tidyr::separate_wider_delim(
+      value
+      , delim = " on "   
+      , names = c("action", "date")
+      ) 
+}
+
+safely_get_dates_df <- purrr::safely(get_dates_df, NA)
+dates_df <- purrr::map(dates, safely_get_dates_df)
+
+errors <- purrr::map(dates_df, "error") |> purrr::discard(is.null)
+results <- purrr::map(dates_df, "result") |> purrr::discard( \(x) any(is.na(x))) 
+
+purrr::imap(results, .f =  \(x, idx){
+  x |> 
+    dplyr::mutate(id = idx)
+}) -> results
+
+results <- dplyr::bind_rows(results)
+
+# these could both  local to the get courts thing if needed, but I feel like i
+# might reuse this patter for getting judge names 
+
+get_layer  <- function(list, comb = c(1,2), layer){
+  list[comb] |>
+    purrr::map(layer)
+}
+
+handle_confirmation <- function(list, n_discomf){
+  if(rlang::is_empty(list[[3]])){
+    list
+  } else {
+    get_layer(list, layer = n_discomf + 1)
+    }
+  } 
+
+# this works except for the not confirmed people. need to handle how to drop
+# them then drop them off actually need the dates to do this perfectly but I
+# don't think it matters because no judge has ever failed to be nominated to a
+# lower court before going on to be added to the surpremes
+get_court_df <- function(list){
+  
+  n_not_confirmed <- length(list[[3]])
+  
+  list |>    
+    handle_confirmation(n_discomf = n_not_confirmed) |> 
+    purrr::reduce(c) |>
+    purrr::map(dplyr::as_tibble) |> 
+    purrr::reduce(dplyr::bind_rows) |> 
+    tidyr::separate_wider_delim(
+      value
+      , delim = ","   
+      , names = c("title", "court")
+      , too_many = "merge"
+    ) 
+  }
+
+
+# putting aside the tough edge cases from above for now. 23 out of 4000 is okay,
+# but will fix soon.
+select <- map_lgl(dates_df |>  map("error"), is.null)
+courts <- courts[which(select)]
+
+courts_df <- purrr::map(courts, get_court_df)
+
 
 ```
 
@@ -139,6 +218,7 @@ We want to look at a couple of things
     -   do they change which kinds of parties are filing
 
 ```{r}
+#get dates in order
 
 
 #need to fix the manuscript collections and bibliography

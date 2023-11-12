@@ -18,7 +18,7 @@ total_courts <- (purrr::map(courts, 1) |> lengths()) +
 
 sum(total != total_courts) %in%  
   
-  which(total != terminations) 
+which(total != terminations) 
 
 which(total_courts != total) 
 
