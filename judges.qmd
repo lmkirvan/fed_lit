@@ -79,13 +79,6 @@ urls <- paste0(url, letters)
 
 # use the get_judges function to get the list of links for all the judges
 judge_urls <- purrr::map(urls, get_judges) |>  purrr::list_c()
-judge_names <- stringr::str_remove(
-  judge_urls
-  , "https://www.fjc.gov/history/judges/"
-  )
-
-# these are last, first second etc. 
-judge_names <- stringr::str_split(judge_names, "-")
 
 # get it all
 get_text_safely <- purrr::safely(get_text, otherwise = NA)
@@ -93,16 +86,20 @@ get_text_safely <- purrr::safely(get_text, otherwise = NA)
 #this takes a bit. may need to do it safely
 texts_results <- purrr:::map(judge_urls, get_text_safely)
 
+names(texts_results) <- judge_urls
+save(texts_results, file = "texts.Rdata")
+
 texts <- purrr::map_chr(texts_results, "result")
-save(texts, file = "texts.Rdata")
 
 ```
 
 ```{r}
 
 load("texts.Rdata")
+library(tidyverse)
 
-texts |> 
+texts_results |>
+  map("result") |> 
   str_cut_after("Education") |> 
   str_cut_after("Supreme Court Oath:") |> 
   str_cut_after("Other Federal Judicial Service:") |> 
@@ -119,14 +116,8 @@ get_dates <- ff(c("[nN]ominated"
 
 dates <- purrr::map(short_texts, get_dates)
 
-## court names 
-get_courts <- ff(c("Justice", "Judge", "not confirmed"), rest = ".*?\n") 
-courts <- purrr::map(short_texts, get_courts)
-
-
 # This kinda works
 get_dates_df <- function(list){ 
-  
   list[c(2,4,5)] |> 
     purrr::reduce(c) |> 
     purrr::map(dplyr::as_tibble) |> 
@@ -140,16 +131,17 @@ get_dates_df <- function(list){
 
 safely_get_dates_df <- purrr::safely(get_dates_df, NA)
 dates_df <- purrr::map(dates, safely_get_dates_df)
+select <- map_lgl(dates_df |>  map("error"), is.null)
 
 errors <- purrr::map(dates_df, "error") |> purrr::discard(is.null)
-results <- purrr::map(dates_df, "result") |> purrr::discard( \(x) any(is.na(x))) 
+dates_df <- purrr::map(dates_df, "result") |> purrr::discard( \(x) any(is.na(x))) 
 
-purrr::imap(results, .f =  \(x, idx){
+purrr::imap(dates_df, .f =  \(x, idx){
   x |> 
     dplyr::mutate(id = idx)
-}) -> results
+}) -> dates_df
 
-results <- dplyr::bind_rows(results)
+df <- dplyr::bind_rows(dates_df)
 
 # these could both  local to the get courts thing if needed, but I feel like i
 # might reuse this patter for getting judge names 
@@ -188,14 +180,64 @@ get_court_df <- function(list){
     ) 
   }
 
-
 # putting aside the tough edge cases from above for now. 23 out of 4000 is okay,
 # but will fix soon.
-select <- map_lgl(dates_df |>  map("error"), is.null)
-courts <- courts[which(select)]
 
+get_courts <- ff(c("Justice", "Judge", "not confirmed"), rest = ".*?\n") 
+courts <- purrr::map(short_texts, get_courts)
+courts <- courts[which(select)]
 courts_df <- purrr::map(courts, get_court_df)
 
+purrr::imap(courts_df, .f =  \(x, idx){
+  x |> 
+    dplyr::mutate(id = idx)
+}) -> courts
+
+courts <- dplyr::bind_rows(courts)
+
+judge_urls <- names(texts_results)
+judge_names <- stringr::str_remove(
+  judge_urls
+  , "https://www.fjc.gov/history/judges/"
+  )
+# these are last, first second etc. 
+judge_names <- judge_names[which(select)]
+
+nominations <- 
+  dates[which(select)] |>    
+  map(1) |> 
+  map(as_tibble) |> 
+  imap(\(x, idx) x |> mutate(id = idx)) |> 
+  bind_rows()
+
+nominations <- nominations |> 
+  tidyr::separate_wider_delim(
+    value
+    , delim = " on "   
+    , names = c("nominator", "date")
+    , too_many = "merge"
+    ) 
+
+
+terminations <- 
+  dates[which(select)] |>    
+  map(6) |> 
+  map(as_tibble) |> 
+  imap(\(x, idx) x |> mutate(id = idx)) |> 
+  bind_rows()
+
+#group by ids and then add a rownumber to create a court-level id.
+add_court_id <- function(df){
+  
+  df |> 
+    group_by(id) |> 
+    mutate(
+      court_number = row_number()
+      , full_id = paste0(id, "-", court_number)
+      ) 
+}
+
+df <- add_court_id(df)
 
 ```
 
@@ -218,9 +260,6 @@ We want to look at a couple of things
     -   do they change which kinds of parties are filing
 
 ```{r}
-#get dates in order
 
-
-#need to fix the manuscript collections and bibliography
 
 ```
