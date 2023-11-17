@@ -214,30 +214,46 @@ nominations <- nominations |>
   tidyr::separate_wider_delim(
     value
     , delim = " on "   
-    , names = c("nominator", "date")
+    , names = c("nominator", "nomination date")
     , too_many = "merge"
     ) 
-
 
 terminations <- 
   dates[which(select)] |>    
   map(6) |> 
   map(as_tibble) |> 
   imap(\(x, idx) x |> mutate(id = idx)) |> 
-  bind_rows()
+  bind_rows() |> 
+  rename(termination_date = value)
 
 #group by ids and then add a rownumber to create a court-level id.
 add_court_id <- function(df){
-  
   df |> 
     group_by(id) |> 
     mutate(
       court_number = row_number()
       , full_id = paste0(id, "-", court_number)
-      ) 
+      ) |> 
+    select(-court_number)
 }
 
 df <- add_court_id(df)
+courts <- add_court_id(courts)
+terminations <- add_court_id(terminations)
+nominations <- add_court_id(nominations)
+
+left_join(df, courts |> ungroup() |> select(-id), by = "full_id") -> df
+left_join(df, nominations |> ungroup() |> select(-id), by = "full_id") -> df
+left_join(df, terminations |> ungroup() |> select(-id), by = "full_id") -> df
+
+judge_df <- tibble(
+  judge_names = judge_names
+  , judge_urls = judge_urls[select]
+)
+
+judge_df$id <- seq(1, nrow(judge_df))
+
+left_join(df, judge_df, by = "id") -> df
 
 ```
 
