@@ -7,18 +7,15 @@ editor: visual
 ```{r setup}
 
 get_judges <- function(letter_url){
-  
   rvest::read_html(letter_url) |> 
     rvest::html_element(
       css = "body > div.l-page > div > div > div > div.view-content") |> 
     rvest::html_elements("a") |> 
     rvest::html_attrs() -> judge_stems
-  
   paste0("https://www.fjc.gov", judge_stems)
 }
 
 get_text <- function(url){ 
-  
   print(url)
   Sys.sleep(.1)
   url |> 
@@ -93,7 +90,7 @@ texts <- purrr::map_chr(texts_results, "result")
 
 ```
 
-```{r}
+```{r load}
 
 load("texts.Rdata")
 library(tidyverse)
@@ -105,6 +102,10 @@ texts_results |>
   str_cut_after("Other Federal Judicial Service:") |> 
   str_cut_after("Professional Career")-> short_texts
 
+```
+
+```{r main_dates}
+
 #this gets the dates for various court changes 
 get_dates <- ff(c("[nN]ominated"
                   , "[cC]ommission"
@@ -113,6 +114,7 @@ get_dates <- ff(c("[nN]ominated"
                   , "[Rr]eassigned"
                   , "[tT]erminated")
                 )
+
 
 dates <- purrr::map(short_texts, get_dates)
 
@@ -131,10 +133,17 @@ get_dates_df <- function(list){
 
 safely_get_dates_df <- purrr::safely(get_dates_df, NA)
 dates_df <- purrr::map(dates, safely_get_dates_df)
+
+# we need this later to make sure that the data sets stay consistent. The
+# problem is that a few of these judges were never confirmed, and others were in
+# weird courts that don't exist anymore 
 select <- map_lgl(dates_df |>  map("error"), is.null)
 
-errors <- purrr::map(dates_df, "error") |> purrr::discard(is.null)
-dates_df <- purrr::map(dates_df, "result") |> purrr::discard( \(x) any(is.na(x))) 
+errors <- purrr::map(dates_df, "error") |>
+  purrr::discard(is.null)
+
+dates_df <- purrr::map(dates_df, "result") |> 
+  purrr::discard( \(x) any(is.na(x))) 
 
 purrr::imap(dates_df, .f =  \(x, idx){
   x |> 
@@ -143,9 +152,11 @@ purrr::imap(dates_df, .f =  \(x, idx){
 
 df <- dplyr::bind_rows(dates_df)
 
+```
+
+```{r courts}
 # these could both  local to the get courts thing if needed, but I feel like i
 # might reuse this patter for getting judge names 
-
 get_layer  <- function(list, comb = c(1,2), layer){
   list[comb] |>
     purrr::map(layer)
@@ -158,7 +169,6 @@ handle_confirmation <- function(list, n_discomf){
     get_layer(list, layer = n_discomf + 1)
     }
   } 
-
 # this works except for the not confirmed people. need to handle how to drop
 # them then drop them off actually need the dates to do this perfectly but I
 # don't think it matters because no judge has ever failed to be nominated to a
@@ -182,7 +192,6 @@ get_court_df <- function(list){
 
 # putting aside the tough edge cases from above for now. 23 out of 4000 is okay,
 # but will fix soon.
-
 get_courts <- ff(c("Justice", "Judge", "not confirmed"), rest = ".*?\n") 
 courts <- purrr::map(short_texts, get_courts)
 courts <- courts[which(select)]
@@ -194,6 +203,10 @@ purrr::imap(courts_df, .f =  \(x, idx){
 }) -> courts
 
 courts <- dplyr::bind_rows(courts)
+
+```
+
+```{r}
 
 judge_urls <- names(texts_results)
 judge_names <- stringr::str_remove(
@@ -226,25 +239,14 @@ terminations <-
   bind_rows() |> 
   rename(termination_date = value)
 
-#group by ids and then add a rownumber to create a court-level id.
-add_court_id <- function(df){
-  df |> 
-    group_by(id) |> 
-    mutate(
-      court_number = row_number()
-      , full_id = paste0(id, "-", court_number)
-      ) |> 
-    select(-court_number)
-}
-
-df <- add_court_id(df)
-courts <- add_court_id(courts)
-terminations <- add_court_id(terminations)
-nominations <- add_court_id(nominations)
-
-left_join(df, courts |> ungroup() |> select(-id), by = "full_id") -> df
-left_join(df, nominations |> ungroup() |> select(-id), by = "full_id") -> df
-left_join(df, terminations |> ungroup() |> select(-id), by = "full_id") -> df
+senior_status <- 
+  dates[which(select)] |> 
+  map(3) |> 
+  map(as_tibble) |> 
+  imap(\(x, idx) x |> mutate(id = idx)) |> 
+  bind_rows() |> 
+  distinct() |> 
+  rename(senior_date = value)
 
 judge_df <- tibble(
   judge_names = judge_names
@@ -253,7 +255,31 @@ judge_df <- tibble(
 
 judge_df$id <- seq(1, nrow(judge_df))
 
+```
+
+```{r finalize}
+#group by ids and then add a rownumber to create a court-level id.
+add_group_id <- function(df){
+  df |> 
+    group_by(id) |> 
+    mutate(
+      row_id = row_number()
+      , full_id = paste0(id, "-", row_id)
+      ) |> 
+    select(-row_id)
+}
+
+df <- add_group_id(df)
+courts <- add_group_id(courts)
+terminations <- add_group_id(terminations)
+nominations <- add_group_id(nominations)
+
+left_join(df, courts |> ungroup() |> select(-id), by = "full_id") -> df
+left_join(df, nominations |> ungroup() |> select(-id), by = "full_id") -> df
+left_join(df, terminations |> ungroup() |> select(-id), by = "full_id") -> df
+left_join(df, senior_status |> ungroup(), by = "id") -> df
 left_join(df, judge_df, by = "id") -> df
+
 
 ```
 
@@ -275,7 +301,3 @@ We want to look at a couple of things
     -   do they change the pace of filings
     -   do they change which kinds of parties are filing
 
-```{r}
-
-
-```
