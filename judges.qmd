@@ -285,14 +285,14 @@ left_join(df, terminations |> ungroup() |> select(-id), by = "full_id") -> df
 left_join(df, senior_status |> ungroup(), by = "id") -> df
 left_join(df, judge_df, by = "id") -> df
 
-
 df <- df |> 
   mutate(termination_date = str_remove_before(termination_date, "on ")
          , nominator = str_remove_before(nominator, "by ")
          , senior_date = str_remove_before(senior_date, "on "))
 
-df$senior_date[1:100]
+df$nomination_date
 
+write_csv(df, "federal_judges.csv")
 
 ```
 
