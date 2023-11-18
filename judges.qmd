@@ -24,16 +24,22 @@ get_text <- function(url){
     rvest::html_text2()
   }
 
-# helper function need to look at if this impacts speed 
 start_of_match <- function(string, pattern){
   stringr::str_locate(string, pattern)[ , 1]
   }
   
 # function to get the first part of a string based on a match
-str_cut_after <- function(string, pattern){
+str_remove_after <- function(string, pattern){
   location <- start_of_match(string, pattern ) 
   location[is.na(location)] <- nchar(string)[is.na(location)]
   stringr::str_sub( string, start = 0, end = location)
+}
+
+str_remove_before <- function(string, pattern){
+  location <- start_of_match(string, pattern ) 
+  location[is.na(location)] <- nchar(string)[is.na(location)]
+  location <- location + nchar(pattern) 
+  stringr::str_sub( string, start = location)
 }
 
 # using a function factor here so that I can avoid editing this so much while
@@ -66,7 +72,7 @@ we need:
 
 -   court (can vary by appointment)
 
-```{r}
+```{r get_texts}
 
 # base url with pages for each letter:
 url <- "https://www.fjc.gov/history/judges/search/glossary-search/"
@@ -97,10 +103,10 @@ library(tidyverse)
 
 texts_results |>
   map("result") |> 
-  str_cut_after("Education") |> 
-  str_cut_after("Supreme Court Oath:") |> 
-  str_cut_after("Other Federal Judicial Service:") |> 
-  str_cut_after("Professional Career")-> short_texts
+  str_remove_after("Education") |> 
+  str_remove_after("Supreme Court Oath:") |> 
+  str_remove_after("Other Federal Judicial Service:") |> 
+  str_remove_after("Professional Career")-> short_texts
 
 ```
 
@@ -114,7 +120,6 @@ get_dates <- ff(c("[nN]ominated"
                   , "[Rr]eassigned"
                   , "[tT]erminated")
                 )
-
 
 dates <- purrr::map(short_texts, get_dates)
 
@@ -227,7 +232,7 @@ nominations <- nominations |>
   tidyr::separate_wider_delim(
     value
     , delim = " on "   
-    , names = c("nominator", "nomination date")
+    , names = c("nominator", "nomination_date")
     , too_many = "merge"
     ) 
 
@@ -281,7 +286,16 @@ left_join(df, senior_status |> ungroup(), by = "id") -> df
 left_join(df, judge_df, by = "id") -> df
 
 
+df <- df |> 
+  mutate(termination_date = str_remove_before(termination_date, "on ")
+         , nominator = str_remove_before(nominator, "by ")
+         , senior_date = str_remove_before(senior_date, "on "))
+
+df$senior_date[1:100]
+
+
 ```
+
 
 some stuff do to do:
 
