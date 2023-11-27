@@ -141,7 +141,7 @@ dates_df <- purrr::map(dates, safely_get_dates_df)
 
 # we need this later to make sure that the data sets stay consistent. The
 # problem is that a few of these judges were never confirmed, and others were in
-# weird courts that don't exist anymore 
+# weird courts that don't exist anymore
 select <- map_lgl(dates_df |>  map("error"), is.null)
 
 errors <- purrr::map(dates_df, "error") |>
@@ -150,10 +150,11 @@ errors <- purrr::map(dates_df, "error") |>
 dates_df <- purrr::map(dates_df, "result") |> 
   purrr::discard( \(x) any(is.na(x))) 
 
-purrr::imap(dates_df, .f =  \(x, idx){
+purrr::imap(dates_df
+            , .f =  \(x, idx){
   x |> 
-    dplyr::mutate(id = idx)
-}) -> dates_df
+    dplyr::mutate(id = idx)}
+  ) -> dates_df
 
 df <- dplyr::bind_rows(dates_df)
 
