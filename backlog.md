@@ -1,7 +1,12 @@
 todo 
 
-[] 
- 
+- [] convert to package format (look at how to document data scripts in r packages book
+- [] write a function (I think just) that converts the dense version into a time series groupings (e.g. take the have for each day the unique combination of judges in a court. ) what about nominating presidents?
+  - does this look at creating a long time series first and then just nesting as needed? 
+- [] suggest weights for senior status( .2 for senior status and 1 for judges)
+- [] consider including schools?
+- [] look for a federalist society list? 
+
 function that takes court list and date lists and does a join of some kind
 
 Modeling questions
