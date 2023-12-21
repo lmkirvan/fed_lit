@@ -20,7 +20,8 @@ get_text <- function(url){
   Sys.sleep(.1)
   url |> 
     rvest::read_html() |> 
-    rvest::html_element(css = "body > div.l-page > div > div > div > div") |> 
+    rvest::html_element(
+      css = "body > div.l-page > div > div > div > div") |> 
     rvest::html_text2()
   }
 
@@ -150,19 +151,22 @@ errors <- purrr::map(dates_df, "error") |>
 dates_df <- purrr::map(dates_df, "result") |> 
   purrr::discard( \(x) any(is.na(x))) 
 
-purrr::imap(dates_df
-            , .f =  \(x, idx){
+purrr::imap(dates_df, .f =  \(x, idx){
   x |> 
     dplyr::mutate(id = idx)}
   ) -> dates_df
 
 df <- dplyr::bind_rows(dates_df)
 
+df$date <- df$date |> str_sub(1, -2)
+
+df$date <- lubridate::mdy(df$date)
+
 ```
 
 ```{r courts}
 # these could both  local to the get courts thing if needed, but I feel like i
-# might reuse this patter for getting judge names 
+# might reuse this patter for getting judge names
 get_layer  <- function(list, comb = c(1,2), layer){
   list[comb] |>
     purrr::map(layer)
@@ -213,8 +217,8 @@ courts <- dplyr::bind_rows(courts)
 ```
 
 ```{r}
-
 judge_urls <- names(texts_results)
+
 judge_names <- stringr::str_remove(
   judge_urls
   , "https://www.fjc.gov/history/judges/"
@@ -257,7 +261,7 @@ senior_status <-
 judge_df <- tibble(
   judge_names = judge_names
   , judge_urls = judge_urls[select]
-)
+  )
 
 judge_df$id <- seq(1, nrow(judge_df))
 
@@ -291,7 +295,11 @@ df <- df |>
          , nominator = str_remove_before(nominator, "by ")
          , senior_date = str_remove_before(senior_date, "on "))
 
-df$nomination_date
+
+df |>  
+  mutate(across(ends_with("_date"), \(x) stringr::str_sub(x, 1,-2 ))) |> 
+  mutate(across(ends_with("_date"), lubridate::mdy)) |> 
+  mutate(action = stringr::str_trim(action)) -> df
 
 write_csv(df, "federal_judges.csv")
 

@@ -1,0 +1,23 @@
+---
+title: "ts"
+format: html
+editor: visual
+---
+
+## make that sweet data into a ts
+
+make a full range of dates
+
+index it with the termination dates to make the dataset to join with.
+
+convert dates to lookup tuple and then use them to index the whole date array!
+
+```{r}
+
+library(tidyverse)
+
+df <- readr::read_csv("federal_judges.csv")
+
+
+
+```
