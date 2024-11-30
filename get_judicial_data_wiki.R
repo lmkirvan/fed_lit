@@ -17,16 +17,12 @@ base_string <- c(
 urls <- stringr::str_replace(
   base_string
   , pattern = "\\{circuit\\}"
-  , circuits
-  )
+  , circuits)
 
 site <- rvest::read_html(urls[2]) 
 
 tables <- site |> rvest::html_elements("table")
-  
-tables |> 
+
+tables |>
   purrr::map(rvest::html_table) |>
   purrr::keep( ~ ncol(.) == 9) -> final_tables
-  
-final_tables[[1]]
-

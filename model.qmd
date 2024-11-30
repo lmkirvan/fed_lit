@@ -42,8 +42,7 @@ gc()
 
 ```
 
-
-```{R}
+```{r}
 
 bf0 <- brms::bf( ttr_log | cens(censored) ~ (1 + fy  | DISTRICT), decomp = "QR")
 
@@ -238,17 +237,11 @@ bayesplot::ppc_km_overlay(
   , status_y = as.numeric(mod7_w$data$censored)
   , y = exp(mod7_w$data$ttr_log  ))
 
-
-
-
 table(sample$JURIS )
-
-
 
 ```
 
 this took overnight to run and the pp check looked way worse than the skew normal results, but maybe I should figure out if there is some way to identify the extremely short cases better with just some linear terms int the main model
-
 
 ```{r}
 #| label:model_8
@@ -273,5 +266,3 @@ brms::pp_check(mod8_w)
 brms::waic(mod8_w)
 
 ```
-
-
