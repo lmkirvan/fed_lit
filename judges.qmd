@@ -304,5 +304,3 @@ df |>
 write_csv(df, "federal_judges.csv")
 
 ```
-
-
